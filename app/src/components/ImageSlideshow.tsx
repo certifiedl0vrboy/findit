@@ -71,8 +71,8 @@ const ImageSlideshow = ({ images, interval = 5000 }: ImageSlideshowProps) => {
           <button
             key={index}
             onClick={() => setCurrentIndex(index)}
-            className={`h-1 rounded-full transition-all duration-300 ${index === currentIndex
-              ? 'w-8 bg-green-500'
+            className={`h-1.5 rounded-full transition-all duration-300 ${index === currentIndex
+              ? 'w-8 bg-kenyan-red'
               : 'w-2 bg-white/40 hover:bg-white/60'
               }`}
           />

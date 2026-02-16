@@ -10,6 +10,12 @@ module.exports = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        'alabaster': '#F9F8F6',
+        'soft-black': '#1A1A1A',
+        'mocha': '#4A3B32',
+        'champagne': '#D4AF37',
+        'kenyan-red': '#BF212F',
+        'forest-black': '#0A261A',
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -49,6 +55,12 @@ module.exports = {
           ring: "hsl(var(--sidebar-ring))",
         },
       },
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', '"DM Sans"', '"Manrope"', 'sans-serif'],
+        serif: ['"Italiana"', '"Playfair Display"', 'serif'],
+        manrope: ['"Manrope"', 'sans-serif'],
+        dm: ['"DM Sans"', 'sans-serif'],
+      },
       borderRadius: {
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
@@ -72,11 +84,21 @@ module.exports = {
           "0%,70%,100%": { opacity: "1" },
           "20%,50%": { opacity: "0" },
         },
+        "fade-in-up": {
+          from: { opacity: "0", transform: "translateY(30px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "caret-blink": "caret-blink 1.25s ease-out infinite",
+        "fade-in-up": "fade-in-up 0.7s ease-out forwards",
+        "bounce-subtle": "bounce-subtle 0.5s ease-in-out",
       },
     },
   },

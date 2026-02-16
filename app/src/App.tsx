@@ -5,15 +5,17 @@ import LandingPage from './pages/LandingPage';
 import SearchPage from './pages/SearchPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
 import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
+import FloatingHelpButton from './components/FloatingHelpButton';
 import './App.css';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Show loading for 3 seconds then redirect to landing
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 3000);
@@ -29,8 +31,17 @@ function App() {
         <Route path="/search" element={<SearchPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/profile/:id" element={<ProfilePage />} />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <ErrorBoundary>
+              <Dashboard />
+            </ErrorBoundary>
+          </ProtectedRoute>
+        } />
       </Routes>
+      {/* Global FAB — visible on every page */}
+      {!isLoading && <FloatingHelpButton />}
     </Router>
   );
 }

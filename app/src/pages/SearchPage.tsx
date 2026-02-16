@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Phone, ArrowLeft, Filter, Star, Navigation, Building2, Wrench, Loader2, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, MapPin, Phone, ArrowLeft, Filter, Navigation, Building2, Wrench, Loader2, X, Star, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ImageSlideshow from '@/components/ImageSlideshow';
 import { backgroundImages } from '@/lib/backgroundImages';
+import { supabase } from '@/lib/supabase';
 
 // Service categories (250 services)
 const serviceCategories = [
@@ -153,30 +154,13 @@ const businessCategories = [
   'Sauna', 'Steam Room', 'Jacuzzi', 'Hot Tub', 'Pool Services', 'Pool Supplies',
 ];
 
-// Sample service providers data
-const sampleServiceProviders = [
-  { id: 1, name: 'John Kamau', service: 'Plumber', phone: '+254712345678', rating: 4.8, reviews: 124, distance: '0.5 km', location: 'Nairobi CBD' },
-  { id: 2, name: 'Mary Wanjiku', service: 'Electrician', phone: '+254723456789', rating: 4.9, reviews: 89, distance: '1.2 km', location: 'Westlands' },
-  { id: 3, name: 'Peter Ochieng', service: 'Carpenter', phone: '+254734567890', rating: 4.7, reviews: 156, distance: '2.1 km', location: 'Kilimani' },
-  { id: 4, name: 'Grace Muthoni', service: 'Hairdresser', phone: '+254745678901', rating: 4.9, reviews: 234, distance: '0.8 km', location: 'Ngara' },
-  { id: 5, name: 'James Mwangi', service: 'Mechanic', phone: '+254756789012', rating: 4.6, reviews: 78, distance: '3.5 km', location: 'Industrial Area' },
-  { id: 6, name: 'Amina Hassan', service: 'Tailor', phone: '+254767890123', rating: 4.8, reviews: 145, distance: '1.5 km', location: 'Eastleigh' },
-];
-
-// Sample businesses data
-const sampleBusinesses = [
-  { id: 1, name: 'Nairobi Auto Spa', type: 'Car Wash', phone: '+254711111111', rating: 4.7, reviews: 89, distance: '0.3 km', location: 'Nairobi CBD', hours: 'Open 24 hours' },
-  { id: 2, name: 'Westlands Pharmacy', type: 'Pharmacy', phone: '+254722222222', rating: 4.9, reviews: 234, distance: '1.5 km', location: 'Westlands', hours: 'Open until 10 PM' },
-  { id: 3, name: 'Kilimani Supermarket', type: 'Supermarket', phone: '+254733333333', rating: 4.5, reviews: 567, distance: '2.0 km', location: 'Kilimani', hours: 'Open until 9 PM' },
-  { id: 4, name: 'Java House Ngara', type: 'Restaurant', phone: '+254744444444', rating: 4.6, reviews: 445, distance: '0.7 km', location: 'Ngara', hours: 'Open until 11 PM' },
-  { id: 5, name: 'Eastleigh Hardware', type: 'Hardware Store', phone: '+254755555555', rating: 4.4, reviews: 123, distance: '2.5 km', location: 'Eastleigh', hours: 'Open until 7 PM' },
-  { id: 6, name: 'Industrial Garage', type: 'Garage', phone: '+254766666666', rating: 4.8, reviews: 198, distance: '4.0 km', location: 'Industrial Area', hours: 'Open until 6 PM' },
-];
-
 const SearchPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const categoryParam = searchParams.get('category');
+
   const [activeTab, setActiveTab] = useState('services');
-  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceSearch, setServiceSearch] = useState(categoryParam || '');
   const [businessSearch, setBusinessSearch] = useState('');
   const [locationQuery, setLocationQuery] = useState(() => {
     const stored = localStorage.getItem('userLocation');
@@ -249,27 +233,59 @@ const SearchPage = () => {
     );
   }, []);
 
+  const [providers, setProviders] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Fetch real providers from Supabase
+  useEffect(() => {
+    const fetchProviders = async () => {
+      setLoadingData(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, business_name, category, phone, location, user_type, avatar_url, description, rating, reviews_count, business_hours')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching providers:', error);
+        } else {
+          setProviders(data || []);
+        }
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+      setLoadingData(false);
+    };
+    fetchProviders();
+  }, []);
+
+  // Split providers by user_type
+  const serviceProviders = useMemo(() => providers.filter(p => p.user_type === 'service'), [providers]);
+  const businesses = useMemo(() => providers.filter(p => p.user_type === 'business'), [providers]);
+
   // Derive filtered services from search state
   const filteredServices = useMemo(() => {
     if (serviceSearch || selectedServiceCategory) {
-      return sampleServiceProviders.filter(provider =>
-        provider.service.toLowerCase().includes((serviceSearch || selectedServiceCategory).toLowerCase()) ||
-        provider.name.toLowerCase().includes(serviceSearch.toLowerCase())
+      const query = (serviceSearch || selectedServiceCategory).toLowerCase();
+      return serviceProviders.filter(p =>
+        (p.category || '').toLowerCase().includes(query) ||
+        (p.full_name || '').toLowerCase().includes(serviceSearch.toLowerCase())
       );
     }
-    return sampleServiceProviders;
-  }, [serviceSearch, selectedServiceCategory]);
+    return serviceProviders;
+  }, [serviceSearch, selectedServiceCategory, serviceProviders]);
 
   // Derive filtered businesses from search state
   const filteredBusinesses = useMemo(() => {
     if (businessSearch || selectedBusinessCategory) {
-      return sampleBusinesses.filter(business =>
-        business.type.toLowerCase().includes((businessSearch || selectedBusinessCategory).toLowerCase()) ||
-        business.name.toLowerCase().includes(businessSearch.toLowerCase())
+      const query = (businessSearch || selectedBusinessCategory).toLowerCase();
+      return businesses.filter(b =>
+        (b.category || '').toLowerCase().includes(query) ||
+        (b.business_name || '').toLowerCase().includes(businessSearch.toLowerCase())
       );
     }
-    return sampleBusinesses;
-  }, [businessSearch, selectedBusinessCategory]);
+    return businesses;
+  }, [businessSearch, selectedBusinessCategory, businesses]);
 
   const handleServiceCategorySelect = (category: string) => {
     setSelectedServiceCategory(category);
@@ -302,201 +318,199 @@ const SearchPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
+    <div className="min-h-screen bg-alabaster font-sans text-[#333333] relative selection:bg-champagne/30 leading-[1.7]">
       <ImageSlideshow images={backgroundImages} interval={6000} />
-      <div className="relative z-10 min-h-screen">
-        {/* Header */}
-        <header className="bg-black/90 border-b border-gray-800 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 py-4">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/landing')}
-                className="text-white hover:bg-white/10"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
 
-              <div className="flex items-center gap-2 flex-1">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center">
-                  <Search className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">
-                    <span className="text-green-500">FIND</span>IT
+      {/* Overlay to ensure text readability on background */}
+      <div className="fixed inset-0 bg-alabaster/95 z-0 pointer-events-none" />
+
+      <div className="relative z-10 min-h-screen flex flex-col">
+        {/* Header - Glassmorphism */}
+        <header className="sticky top-0 z-50 bg-alabaster/80 border-b border-black/5 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigate('/landing')}
+                  className="text-[#333333] hover:bg-black/5 rounded-full transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-forest-black flex items-center justify-center shadow-lg shadow-forest-black/20">
+                    <Search className="w-5 h-5 text-white" />
+                  </div>
+                  <h1 className="text-xl font-serif font-semibold text-soft-black tracking-tight">
+                    FIND<span className="text-forest-black">IT</span>
                   </h1>
                 </div>
               </div>
 
-              {/* User location */}
-              <div className="flex items-center gap-2 glass rounded-full px-3 py-1.5">
+              {/* User location pill */}
+              <div className="flex items-center gap-2 bg-white/50 border border-black/5 shadow-sm rounded-full px-4 py-2 backdrop-blur-md">
                 {isLocating ? (
-                  <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
+                  <Loader2 className="w-4 h-4 text-forest-black animate-spin" />
                 ) : (
-                  <Navigation className="w-4 h-4 text-green-500" />
+                  <Navigation className="w-4 h-4 text-forest-black" />
                 )}
-                <span className="text-sm text-white hidden md:inline">{userLocation}</span>
+                <span className="text-sm font-medium text-[#333333] hidden md:inline font-sans">{userLocation}</span>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Search Section */}
-        <div className="bg-gradient-to-b from-gray-900 to-black border-b border-gray-800">
-          <div className="max-w-5xl mx-auto px-4 py-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-6">
-              What are you looking for?
+        {/* Search & Hero Section */}
+        <div className="pt-12 pb-8 px-4">
+          <div className="max-w-4xl mx-auto text-center mb-10">
+            <h2 className="text-4xl md:text-5xl font-serif font-semibold text-[#1A1A1A] mb-4 tracking-[-0.02em]">
+              Discover Excellence
             </h2>
+            <p className="text-forest-black/70 font-bold tracking-[0.15em] uppercase text-xs font-serif">
+              Connect with Kenya's Finest Professionals
+            </p>
+          </div>
 
-            {/* Location Input */}
-            <div className="relative mb-6 max-w-xl mx-auto">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Your location"
-                value={locationQuery}
-                onChange={(e) => setLocationQuery(e.target.value)}
-                className="pl-12 pr-4 py-5 bg-white/5 border-gray-700 text-white placeholder:text-gray-500 focus:border-green-500 focus:ring-green-500"
-              />
-              {isLocating && (
-                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500 animate-spin" />
-              )}
+          <div className="max-w-3xl mx-auto space-y-6">
+            {/* Location Input Floating */}
+            <div className="relative group max-w-lg mx-auto mb-8">
+              <div className="absolute inset-0 bg-gradient-to-r from-forest-black/10 to-champagne/10 rounded-full blur transition-all opacity-40 group-hover:opacity-70" />
+              <div className="relative flex items-center bg-white rounded-full shadow-lg shadow-black/5 border border-black/5 p-1">
+                <div className="pl-4 pr-2 text-mocha/60">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <Input
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  placeholder="Your Location..."
+                  className="border-none shadow-none focus-visible:ring-0 bg-transparent text-[#333333] placeholder:text-mocha/40 h-12 text-base font-sans"
+                />
+                {isLocating && (
+                  <div className="pr-4">
+                    <Loader2 className="w-4 h-4 text-forest-black animate-spin" />
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Tabs for Services and Businesses */}
+            {/* Filter Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 bg-gray-800">
+              <TabsList className="bg-white/50 p-1 border border-black/5 rounded-full shadow-sm mx-auto w-fit mb-8">
                 <TabsTrigger
                   value="services"
-                  className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                  className="rounded-full px-6 py-2.5 data-[state=active]:bg-forest-black data-[state=active]:text-white transition-all duration-300 font-medium font-sans text-mocha"
                 >
                   <Wrench className="w-4 h-4 mr-2" />
                   Services
                 </TabsTrigger>
                 <TabsTrigger
                   value="businesses"
-                  className="data-[state=active]:bg-red-600 data-[state=active]:text-white"
+                  className="rounded-full px-6 py-2.5 data-[state=active]:bg-forest-black data-[state=active]:text-white transition-all duration-300 font-medium font-sans text-mocha"
                 >
                   <Building2 className="w-4 h-4 mr-2" />
                   Businesses
                 </TabsTrigger>
               </TabsList>
 
-              {/* Services Tab */}
-              <TabsContent value="services" className="mt-6">
-                <div className="relative max-w-xl mx-auto">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search for a service (e.g., Plumber, Electrician...)"
-                    value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    onFocus={() => setShowServiceCategories(true)}
-                    className="pl-12 pr-12 py-5 bg-white/5 border-gray-700 text-white placeholder:text-gray-500 focus:border-green-500 focus:ring-green-500"
-                  />
-                  {selectedServiceCategory && (
-                    <button
-                      onClick={clearServiceFilter}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+              {/* Services Content */}
+              <TabsContent value="services" className="mt-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="relative max-w-2xl mx-auto">
+                  <div className="absolute inset-0 bg-gradient-to-r from-forest-black/5 to-transparent rounded-2xl blur-xl opacity-50" />
+                  <div className="relative bg-white rounded-2xl shadow-lg shadow-black/5 border border-black/5 p-2 flex items-center gap-2">
+                    <Search className="w-5 h-5 text-mocha/40 ml-4 shrink-0" />
+                    <Input
+                      placeholder="Search for a service (e.g., Plumber...)"
+                      value={serviceSearch}
+                      onChange={(e) => setServiceSearch(e.target.value)}
+                      onFocus={() => setShowServiceCategories(true)}
+                      className="border-none shadow-none focus-visible:ring-0 bg-transparent text-lg h-12 text-[#333333] placeholder:text-mocha/40 font-sans"
+                    />
+                    {selectedServiceCategory && (
+                      <button onClick={clearServiceFilter} className="p-2 hover:bg-gray-100 rounded-full text-mocha/60">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Dropdown */}
+                  {showServiceCategories && (
+                    <div className="absolute top-full left-0 right-0 mt-4 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-2 flex justify-between items-center border-b border-black/5 mb-2">
+                        <span className="text-xs font-bold text-forest-black uppercase tracking-[0.15em] pl-2 font-serif">Categories</span>
+                        <Button variant="ghost" size="sm" onClick={() => setShowServiceCategories(false)} className="h-6 text-xs text-mocha hover:text-forest-black font-sans">Close</Button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto grid grid-cols-2 gap-1 p-1">
+                        {filteredServiceCategories.map((cat, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleServiceCategorySelect(cat)}
+                            className="text-left px-4 py-2.5 rounded-xl hover:bg-black/5 text-sm text-[#333333] hover:text-forest-black transition-colors font-sans"
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Service Categories Dropdown */}
-                {showServiceCategories && (
-                  <div className="mt-4 glass rounded-xl p-4 max-h-80 overflow-y-auto max-w-xl mx-auto">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-gray-400">Select from 250+ services</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowServiceCategories(false)}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        Close
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {filteredServiceCategories.map((category, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleServiceCategorySelect(category)}
-                          className="text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-green-600/20 text-gray-300 hover:text-white text-sm transition-colors"
-                        >
-                          {category}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Selected Category Badge */}
                 {selectedServiceCategory && (
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <Badge className="bg-green-600 text-white px-3 py-1">
+                  <div className="flex justify-center">
+                    <Badge className="bg-forest-black text-white px-4 py-1.5 text-sm font-medium rounded-full shadow-lg shadow-forest-black/20 font-sans">
                       {selectedServiceCategory}
                     </Badge>
                   </div>
                 )}
               </TabsContent>
 
-              {/* Businesses Tab */}
-              <TabsContent value="businesses" className="mt-6">
-                <div className="relative max-w-xl mx-auto">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search for a business (e.g., Restaurant, Pharmacy...)"
-                    value={businessSearch}
-                    onChange={(e) => setBusinessSearch(e.target.value)}
-                    onFocus={() => setShowBusinessCategories(true)}
-                    className="pl-12 pr-12 py-5 bg-white/5 border-gray-700 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
-                  />
-                  {selectedBusinessCategory && (
-                    <button
-                      onClick={clearBusinessFilter}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+              {/* Businesses Content */}
+              <TabsContent value="businesses" className="mt-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="relative max-w-2xl mx-auto">
+                  <div className="absolute inset-0 bg-gradient-to-r from-forest-black/5 to-transparent rounded-2xl blur-xl opacity-50" />
+                  <div className="relative bg-white rounded-2xl shadow-lg shadow-black/5 border border-black/5 p-2 flex items-center gap-2">
+                    <Search className="w-5 h-5 text-mocha/40 ml-4 shrink-0" />
+                    <Input
+                      placeholder="Search for a business (e.g., Cafe...)"
+                      value={businessSearch}
+                      onChange={(e) => setBusinessSearch(e.target.value)}
+                      onFocus={() => setShowBusinessCategories(true)}
+                      className="border-none shadow-none focus-visible:ring-0 bg-transparent text-lg h-12 text-[#333333] placeholder:text-mocha/40 font-sans"
+                    />
+                    {selectedBusinessCategory && (
+                      <button onClick={clearBusinessFilter} className="p-2 hover:bg-gray-100 rounded-full text-mocha/60">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Dropdown */}
+                  {showBusinessCategories && (
+                    <div className="absolute top-full left-0 right-0 mt-4 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-2 flex justify-between items-center border-b border-black/5 mb-2">
+                        <span className="text-xs font-bold text-forest-black uppercase tracking-[0.15em] pl-2 font-serif">Categories</span>
+                        <Button variant="ghost" size="sm" onClick={() => setShowBusinessCategories(false)} className="h-6 text-xs text-mocha hover:text-forest-black font-sans">Close</Button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto grid grid-cols-2 gap-1 p-1">
+                        {filteredBusinessCategories.map((cat, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleBusinessCategorySelect(cat)}
+                            className="text-left px-4 py-2.5 rounded-xl hover:bg-black/5 text-sm text-[#333333] hover:text-forest-black transition-colors font-sans"
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Business Categories Dropdown */}
-                {showBusinessCategories && (
-                  <div className="mt-4 glass rounded-xl p-4 max-h-80 overflow-y-auto max-w-xl mx-auto">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-gray-400">Select from 250+ businesses</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowBusinessCategories(false)}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        Close
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {filteredBusinessCategories.map((category, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleBusinessCategorySelect(category)}
-                          className="text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-red-600/20 text-gray-300 hover:text-white text-sm transition-colors"
-                        >
-                          {category}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Selected Category Badge */}
                 {selectedBusinessCategory && (
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <Badge className="bg-red-600 text-white px-3 py-1">
+                  <div className="flex justify-center">
+                    <Badge className="bg-forest-black text-white px-4 py-1.5 text-sm font-medium rounded-full shadow-lg shadow-forest-black/20 font-sans">
                       {selectedBusinessCategory}
                     </Badge>
                   </div>
@@ -506,163 +520,144 @@ const SearchPage = () => {
           </div>
         </div>
 
-        {/* Results Section */}
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          {/* Services Results */}
-          {activeTab === 'services' && (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white">
-                  {filteredServices.length} Service Providers Found
-                </h3>
-                <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-white/10">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
+        {/* Results Grid */}
+        <div className="max-w-7xl mx-auto px-6 pb-20 w-full">
+          <div className="flex items-center justify-between mb-8 pb-4 border-b border-black/5">
+            <h3 className="text-xl font-serif font-bold text-[#1A1A1A]">
+              {activeTab === 'services' ? `${filteredServices.length} Professionals` : `${filteredBusinesses.length} Businesses`} Found
+            </h3>
+            <Button variant="outline" className="rounded-full border-black/10 text-[#333333] hover:bg-black/5 hover:text-forest-black font-sans font-bold">
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {loadingData ? (
+              <div className="col-span-full flex justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-forest-black" />
               </div>
-
-              <div className="space-y-4">
-                {filteredServices.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="glass rounded-xl p-6 hover:bg-white/10 transition-colors"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xl font-bold text-white">
-                            {provider.name.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h4 className="text-lg font-semibold text-white">{provider.name}</h4>
-                          <Badge className="bg-green-600/20 text-green-400 border-green-600/30 mt-1">
-                            {provider.service}
-                          </Badge>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-                            <div className="flex items-center gap-1">
-                              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                              <span className="text-white">{provider.rating}</span>
-                              <span>({provider.reviews} reviews)</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4 text-green-500" />
-                              <span>{provider.distance}</span>
-                            </div>
-                            <div className="hidden md:flex items-center gap-1">
-                              <Navigation className="w-4 h-4 text-gray-500" />
-                              <span>{provider.location}</span>
-                            </div>
-                          </div>
+            ) : activeTab === 'services' ? (
+              filteredServices.map((provider) => (
+                <div
+                  key={provider.id}
+                  onClick={() => navigate(`/profile/${provider.id}`)}
+                  className="group bg-white rounded-[2rem] p-6 shadow-sm border border-black/5 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative"
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full bg-alabaster flex items-center justify-center text-xl font-bold text-forest-black shrink-0 border border-black/5 group-hover:bg-forest-black group-hover:text-white transition-colors duration-300 overflow-hidden">
+                      {provider.avatar_url ? (
+                        <img
+                          src={provider.avatar_url}
+                          alt={provider.full_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (provider.full_name || 'U').split(' ').map((n: string) => n[0]).join('').substring(0, 2)
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-serif font-bold text-[#1A1A1A] leading-tight group-hover:text-forest-black transition-colors">{provider.full_name || 'Service Provider'}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-mocha/70 font-sans">{provider.category || 'General'}</p>
+                        <div className="flex items-center gap-1 bg-forest-black/5 px-2 py-0.5 rounded-full">
+                          <Star className="w-3 h-3 text-champagne fill-champagne" />
+                          <span className="text-[10px] font-bold text-forest-black">{provider.rating || '5.0'}</span>
                         </div>
                       </div>
-
-                      <a
-                        href={`tel:${provider.phone}`}
-                        className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
-                      >
-                        <Phone className="w-5 h-5" />
-                        <span>Call Now</span>
-                      </a>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {filteredServices.length === 0 && (
-                <div className="text-center py-12">
-                  <Wrench className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-2">No services found</h3>
-                  <p className="text-gray-400">Try searching with different keywords</p>
-                </div>
-              )}
-            </>
-          )}
+                  <div className="space-y-2 mb-6 font-sans">
+                    <div className="flex items-center gap-2 text-sm text-[#333333]/70">
+                      <MapPin className="w-4 h-4 text-mocha/40" />
+                      {provider.location || 'Nairobi, Kenya'}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-[#333333]/70">
+                      <Star className="w-4 h-4 text-mocha/30" />
+                      <span>{provider.reviews_count || 0} reviews</span>
+                    </div>
+                  </div>
 
-          {/* Businesses Results */}
-          {activeTab === 'businesses' && (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white">
-                  {filteredBusinesses.length} Businesses Found
-                </h3>
-                <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-white/10">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {filteredBusinesses.map((business) => (
-                  <div
-                    key={business.id}
-                    className="glass rounded-xl p-6 hover:bg-white/10 transition-colors"
+                  <a
+                    href={`tel:${provider.phone}`}
+                    className="w-full relative z-10 block"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center flex-shrink-0">
-                          <Building2 className="w-8 h-8 text-white" />
-                        </div>
-
-                        <div>
-                          <h4 className="text-lg font-semibold text-white">{business.name}</h4>
-                          <Badge className="bg-red-600/20 text-red-400 border-red-600/30 mt-1">
-                            {business.type}
-                          </Badge>
-                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-                            <div className="flex items-center gap-1">
-                              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                              <span className="text-white">{business.rating}</span>
-                              <span>({business.reviews} reviews)</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4 text-red-500" />
-                              <span>{business.distance}</span>
-                            </div>
-                            <div className="hidden md:flex items-center gap-1">
-                              <Navigation className="w-4 h-4 text-gray-500" />
-                              <span>{business.location}</span>
-                            </div>
-                          </div>
-                          <p className="text-sm text-green-500 mt-1">{business.hours}</p>
+                    <Button className="w-full rounded-xl bg-alabaster text-[#333333] hover:bg-forest-black hover:text-white font-bold py-6 transition-all duration-300 shadow-none hover:shadow-lg font-sans">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Contact
+                    </Button>
+                  </a>
+                </div>
+              ))
+            ) : (
+              filteredBusinesses.map((business) => (
+                <div
+                  key={business.id}
+                  onClick={() => navigate(`/profile/${business.id}`)}
+                  className="group bg-white rounded-[2rem] p-6 shadow-sm border border-black/5 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative"
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full bg-alabaster flex items-center justify-center text-xl font-bold text-forest-black shrink-0 border border-black/5 group-hover:bg-forest-black group-hover:text-white transition-colors duration-300 overflow-hidden">
+                      {business.avatar_url ? (
+                        <img
+                          src={business.avatar_url}
+                          alt={business.business_name || business.full_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Building2 className="w-6 h-6" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-serif font-bold text-[#1A1A1A] leading-tight group-hover:text-forest-black transition-colors">{business.business_name || business.full_name || 'Business'}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-mocha/70 font-sans">{business.category || 'General'}</p>
+                        <div className="flex items-center gap-1 bg-forest-black/5 px-2 py-0.5 rounded-full">
+                          <Star className="w-3 h-3 text-champagne fill-champagne" />
+                          <span className="text-[10px] font-bold text-forest-black">{business.rating || '5.0'}</span>
                         </div>
                       </div>
-
-                      <a
-                        href={`tel:${business.phone}`}
-                        className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors"
-                      >
-                        <Phone className="w-5 h-5" />
-                        <span>Call Now</span>
-                      </a>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {filteredBusinesses.length === 0 && (
-                <div className="text-center py-12">
-                  <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-2">No businesses found</h3>
-                  <p className="text-gray-400">Try searching with different keywords</p>
+                  <div className="space-y-2 mb-6 font-sans">
+                    <div className="flex items-center gap-2 text-sm text-[#333333]/70">
+                      <MapPin className="w-4 h-4 text-mocha/40" />
+                      {business.location || 'Nairobi, Kenya'}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-[#333333]/70">
+                      <Clock className="w-4 h-4 text-mocha/40" />
+                      {business.business_hours || '8:00 AM - 6:00 PM'}
+                    </div>
+                  </div>
+
+                  <a
+                    href={`tel:${business.phone}`}
+                    className="w-full relative z-10 block"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button className="w-full rounded-xl bg-alabaster text-[#333333] hover:bg-forest-black hover:text-white font-bold py-6 transition-all duration-300 shadow-none hover:shadow-lg hover:shadow-forest-black/20 font-sans">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Call Now
+                    </Button>
+                  </a>
                 </div>
-              )}
-            </>
-          )}
+              ))
+            )}
+
+            {((activeTab === 'services' && filteredServices.length === 0) || (activeTab === 'businesses' && filteredBusinesses.length === 0)) && (
+              <div className="col-span-full text-center py-20">
+                <div className="w-20 h-20 rounded-full bg-alabaster flex items-center justify-center mx-auto mb-6">
+                  <Search className="w-8 h-8 text-mocha/40" />
+                </div>
+                <h3 className="text-xl font-serif font-bold text-[#1A1A1A] mb-2">No results found</h3>
+                <p className="text-mocha/60 font-sans">Try adjusting your search or location settings.</p>
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* Footer */}
-        <footer className="border-t border-gray-800 mt-12">
-          <div className="h-1 flex">
-            <div className="flex-1 bg-black" />
-            <div className="flex-1 bg-red-600" />
-            <div className="flex-1 bg-green-600" />
-          </div>
-          <div className="max-w-7xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
-            © 2025 FINDIT. Connecting Kenya&apos;s businesses with customers.
-          </div>
-        </footer>
       </div>
     </div>
   );

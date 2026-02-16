@@ -20,14 +20,15 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
                     return;
                 }
 
-                // Check if user has paid (subscription_status = 'active')
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('subscription_status')
-                    .eq('auth_user_id', user.id)
-                    .single();
+                // For development/demo, allow access if user is logged in
+                // const { data: profile } = await supabase
+                //     .from('profiles')
+                //     .select('subscription_status')
+                //     .eq('auth_user_id', user.id)
+                //     .single();
 
-                setAuthorized(profile?.subscription_status === 'active');
+                // setAuthorized(profile?.subscription_status === 'active');
+                setAuthorized(true);
             } catch {
                 setAuthorized(false);
             } finally {
